@@ -6,7 +6,6 @@ if [[ "${DEBUG:-0}" == "1" ]]; then
   set -x
 fi
 
-# Affiche où ça casse au lieu de "rien"
 trap 'rc=$?; echo "[ERR] Échec (rc=$rc) à la ligne $LINENO: $BASH_COMMAND" >&2; exit $rc' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -64,7 +63,6 @@ get_latest_tag() {
 _strip_v() { echo "${1#v}"; }
 _fail=0
 
-# Lire une variable VERSION dans kube-tools.sh sans exécuter le script
 _read_version_var() {
   local var="$1"
   local line
@@ -90,7 +88,6 @@ _set_version_var() {
     return 0
   fi
 
-  # Portable (macOS/Linux): remplace uniquement la 1ère occurrence de ^VAR=
   local tmp
   tmp="$(mktemp)"
   awk -v var="$var" -v val="$new" '
@@ -155,7 +152,6 @@ echo "----------------------------------------"
 printf "%-10s %-12s %-12s %s\n" "tool" "current" "latest" "status"
 echo "----------------------------------------"
 
-# kubectl: ne doit jamais tuer le script si curl échoue
 _kubectl_latest="$(_strip_v "$(curl -fsSL https://dl.k8s.io/release/stable.txt 2>/dev/null || true)")"
 _check "kubectl" "$(_read_version_var KUBECTL_VERSION)" "${_kubectl_latest:-}" "KUBECTL_VERSION"
 
