@@ -11,9 +11,9 @@ KUBENS_VERSION="0.9.5"
 HELM_VERSION="4.0.4"
 HELMFILE_VERSION="1.2.3"
 K9S_VERSION="0.50.16"
-KUSTOMIZE_VERSION="kustomize/v5.8.0"
+KUSTOMIZE_VERSION="5.8.0"
 STERN_VERSION="1.33.1"
-YQ_VERSION="TestB"
+YQ_VERSION="4.50.1"
 SOPS_VERSION="3.11.0"
 KUBE_PS1_VERSION="0.9.0"
 KUBESHARK_VERSION="52.11.0"
@@ -26,7 +26,7 @@ INSTALL_DIR="/tmp/kube-tools"
 mkdir -p "$INSTALL_DIR"
 
 # Get script directory for kubeconfig detection
-_KUBE_TOOLS_SCRIPT_DIR="${BASH_SOURCE[0]:-${(%):-%x}}"
+_KUBE_TOOLS_SCRIPT_DIR="${BASH_SOURCE[0]:-$0}"
 _KUBE_TOOLS_SCRIPT_DIR="$(cd "$(dirname "$_KUBE_TOOLS_SCRIPT_DIR")" && pwd)"
 
 # Detect OS and architecture

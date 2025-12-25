@@ -53,14 +53,20 @@ get_latest_release() {
 get_latest_tag() {
   local repo=$1
   local json
-  json="$(curl -fsSL "https://api.github.com/repos/$repo/tags?per_page=1" 2>/dev/null || true)"
+  # Fetch more tags to filter out non-version tags (like vTestB)
+  json="$(curl -fsSL "https://api.github.com/repos/$repo/tags?per_page=30" 2>/dev/null || true)"
   [[ -n "$json" ]] || { echo ""; return 0; }
 
-  echo "$json" | grep -q '"name":' || { echo ""; return 0; }
-  echo "$json" | sed -nE 's/.*"name": *"([^"]+)".*/\1/p' | head -1
+  echo "$json" | grep '"name":' | sed -nE 's/.*"name": *"([^"]+)".*/\1/p' | grep -E '^(kustomize/)?v?[0-9]+\.[0-9]+\.[0-9]+$' | head -1
 }
 
-_strip_v() { echo "${1#v}"; }
+_strip_v() {
+  local v="$1"
+  # Handle kustomize tags (kustomize/vX.Y.Z)
+  v="${v#kustomize/}"
+  # Handle standard v prefix
+  echo "${v#v}"
+}
 _fail=0
 
 _read_version_var() {
