@@ -3,31 +3,22 @@
 # Binaries installed in /tmp/kube-tools to avoid duplication across projects
 
 # ============================================
-# TOOL VERSIONS (update here)
-# ============================================
-KUBECTL_VERSION="1.35.0"
-KUBECTX_VERSION="0.9.5"
-KUBENS_VERSION="0.9.5"
-HELM_VERSION="4.0.4"
-HELMFILE_VERSION="1.2.3"
-K9S_VERSION="0.50.16"
-KUSTOMIZE_VERSION="5.8.0"
-STERN_VERSION="1.33.1"
-YQ_VERSION="4.50.1"
-SOPS_VERSION="3.11.0"
-KUBE_PS1_VERSION="0.9.0"
-KUBESHARK_VERSION="52.11.0"
-KUBESEAL_VERSION="0.34.0"
-
-# ============================================
 # CONFIGURATION
 # ============================================
-INSTALL_DIR="/tmp/kube-tools"
-mkdir -p "$INSTALL_DIR"
-
-# Get script directory for kubeconfig detection
+# Get script directory
 _KUBE_TOOLS_SCRIPT_DIR="${BASH_SOURCE[0]:-$0}"
 _KUBE_TOOLS_SCRIPT_DIR="$(cd "$(dirname "$_KUBE_TOOLS_SCRIPT_DIR")" && pwd)"
+
+# Source tool versions
+if [[ -f "$_KUBE_TOOLS_SCRIPT_DIR/tools.conf" ]]; then
+    source "$_KUBE_TOOLS_SCRIPT_DIR/tools.conf"
+else
+    echo "[ERR] tools.conf not found in $_KUBE_TOOLS_SCRIPT_DIR" >&2
+    return 1
+fi
+
+INSTALL_DIR="/tmp/kube-tools"
+mkdir -p "$INSTALL_DIR"
 
 # Detect OS and architecture
 _detect_platform() {
@@ -81,308 +72,119 @@ _mark_version() {
 # INSTALL FUNCTIONS
 # ============================================
 
-_install_kubectl() {
+_install_tool() {
+    local name="$1"
+    local version="$2"
+    local install_type="$3"
+    local url_template="$4"
+    local archive_path="$5"
+
     local platform
     platform=$(_detect_platform) || return 1
     local os="${platform%_*}"
     local arch="${platform#*_}"
-
-    if _check_version "kubectl" "$KUBECTL_VERSION"; then
-        echo "[OK] kubectl $KUBECTL_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing kubectl $KUBECTL_VERSION..."
-    local url="https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/${os}/${arch}/kubectl"
-
-    if curl -fsSL "$url" -o "$INSTALL_DIR/kubectl"; then
-        chmod +x "$INSTALL_DIR/kubectl"
-        _mark_version "kubectl" "$KUBECTL_VERSION"
-        echo "[OK] kubectl $KUBECTL_VERSION installed"
-    else
-        echo "[ERR] Failed to install kubectl" >&2
-        return 1
-    fi
-}
-
-_install_kubectx() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    # kubectx
-    if _check_version "kubectx" "$KUBECTX_VERSION"; then
-        echo "[OK] kubectx $KUBECTX_VERSION already installed"
-    else
-        echo "[DL] Installing kubectx $KUBECTX_VERSION..."
-        local url="https://github.com/ahmetb/kubectx/releases/download/v${KUBECTX_VERSION}/kubectx_v${KUBECTX_VERSION}_${os}_${arch}.tar.gz"
-
-        if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" kubectx; then
-            chmod +x "$INSTALL_DIR/kubectx"
-            _mark_version "kubectx" "$KUBECTX_VERSION"
-            echo "[OK] kubectx $KUBECTX_VERSION installed"
-        else
-            echo "[ERR] Failed to install kubectx" >&2
-            return 1
-        fi
-    fi
-
-    # kubens
-    if _check_version "kubens" "$KUBENS_VERSION"; then
-        echo "[OK] kubens $KUBENS_VERSION already installed"
-    else
-        echo "[DL] Installing kubens $KUBENS_VERSION..."
-        local url="https://github.com/ahmetb/kubectx/releases/download/v${KUBENS_VERSION}/kubens_v${KUBENS_VERSION}_${os}_${arch}.tar.gz"
-
-        if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" kubens; then
-            chmod +x "$INSTALL_DIR/kubens"
-            _mark_version "kubens" "$KUBENS_VERSION"
-            echo "[OK] kubens $KUBENS_VERSION installed"
-        else
-            echo "[ERR] Failed to install kubens" >&2
-            return 1
-        fi
-    fi
-}
-
-_install_helm() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "helm" "$HELM_VERSION"; then
-        echo "[OK] helm $HELM_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing helm $HELM_VERSION..."
-    local url="https://get.helm.sh/helm-v${HELM_VERSION}-${os}-${arch}.tar.gz"
-
-    if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" --strip-components=1 "${os}-${arch}/helm"; then
-        chmod +x "$INSTALL_DIR/helm"
-        _mark_version "helm" "$HELM_VERSION"
-        echo "[OK] helm $HELM_VERSION installed"
-    else
-        echo "[ERR] Failed to install helm" >&2
-        return 1
-    fi
-}
-
-_install_helmfile() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "helmfile" "$HELMFILE_VERSION"; then
-        echo "[OK] helmfile $HELMFILE_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing helmfile $HELMFILE_VERSION..."
-    local url="https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION}_${os}_${arch}.tar.gz"
-
-    if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" helmfile; then
-        chmod +x "$INSTALL_DIR/helmfile"
-        _mark_version "helmfile" "$HELMFILE_VERSION"
-        echo "[OK] helmfile $HELMFILE_VERSION installed"
-    else
-        echo "[ERR] Failed to install helmfile" >&2
-        return 1
-    fi
-}
-
-_install_k9s() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "k9s" "$K9S_VERSION"; then
-        echo "[OK] k9s $K9S_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing k9s $K9S_VERSION..."
-    local os_name
+    local os_title
     case "$os" in
-        darwin) os_name="Darwin" ;;
-        linux) os_name="Linux" ;;
+        darwin) os_title="Darwin" ;;
+        linux) os_title="Linux" ;;
     esac
 
-    local url="https://github.com/derailed/k9s/releases/download/v${K9S_VERSION}/k9s_${os_name}_${arch}.tar.gz"
-
-    if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" k9s; then
-        chmod +x "$INSTALL_DIR/k9s"
-        _mark_version "k9s" "$K9S_VERSION"
-        echo "[OK] k9s $K9S_VERSION installed"
-    else
-        echo "[ERR] Failed to install k9s" >&2
-        return 1
-    fi
-}
-
-_install_kustomize() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "kustomize" "$KUSTOMIZE_VERSION"; then
-        echo "[OK] kustomize $KUSTOMIZE_VERSION already installed"
+    # Check if already installed
+    if _check_version "$name" "$version"; then
+        echo "[OK] $name $version already installed"
         return 0
     fi
 
-    echo "[DL] Installing kustomize $KUSTOMIZE_VERSION..."
-    local url="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv${KUSTOMIZE_VERSION}/kustomize_v${KUSTOMIZE_VERSION}_${os}_${arch}.tar.gz"
+    echo "[DL] Installing $name $version..."
 
-    if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" kustomize; then
-        chmod +x "$INSTALL_DIR/kustomize"
-        _mark_version "kustomize" "$KUSTOMIZE_VERSION"
-        echo "[OK] kustomize $KUSTOMIZE_VERSION installed"
+    # Prepare URL
+    local url="$url_template"
+    url="${url//%VERSION%/$version}"
+    url="${url//%OS%/$os}"
+    url="${url//%ARCH%/$arch}"
+    url="${url//%OS_TITLE%/$os_title}"
+
+    # Prepare archive path if needed
+    local path_in_archive="$archive_path"
+    if [[ -n "$path_in_archive" ]]; then
+        path_in_archive="${path_in_archive//%VERSION%/$version}"
+        path_in_archive="${path_in_archive//%OS%/$os}"
+        path_in_archive="${path_in_archive//%ARCH%/$arch}"
+        path_in_archive="${path_in_archive//%OS_TITLE%/$os_title}"
+    fi
+
+    if [[ "$install_type" == "binary" ]]; then
+        if curl -fsSL "$url" -o "$INSTALL_DIR/$name"; then
+            chmod +x "$INSTALL_DIR/$name"
+            _mark_version "$name" "$version"
+            echo "[OK] $name $version installed"
+        else
+            echo "[ERR] Failed to install $name" >&2
+            return 1
+        fi
+    elif [[ "$install_type" == "script" ]]; then
+        if curl -fsSL "$url" -o "$INSTALL_DIR/$name.sh"; then
+            _mark_version "$name" "$version"
+            echo "[OK] $name $version installed"
+        else
+            echo "[ERR] Failed to install $name" >&2
+            return 1
+        fi
+    elif [[ "$install_type" == "tarball" ]]; then
+        # If archive_path is set, extract specific file
+        # Otherwise extract all (or specific directory logic?)
+        # Current logic mostly extracts specific binary or strips components.
+
+        # Special handling for helm (strip components)
+        if [[ "$name" == "helm" ]]; then
+             if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" --strip-components=1 "$path_in_archive"; then
+                chmod +x "$INSTALL_DIR/$name"
+                _mark_version "$name" "$version"
+                echo "[OK] $name $version installed"
+             else
+                echo "[ERR] Failed to install $name" >&2
+                return 1
+             fi
+             return 0
+        fi
+
+        # Standard extraction
+        if [[ -n "$path_in_archive" ]]; then
+            # Extract specific file to stdout and write to destination
+            # Note: tar -O extracts to stdout.
+            # Some tars don't support -O with specific files easily or behave differently.
+            # Let's try to extract to a temp dir to be safe and move.
+            local tmp_dir
+            tmp_dir=$(mktemp -d)
+            if curl -fsSL "$url" | tar -xz -C "$tmp_dir"; then
+                if [[ -f "$tmp_dir/$path_in_archive" ]]; then
+                    mv "$tmp_dir/$path_in_archive" "$INSTALL_DIR/$name"
+                    chmod +x "$INSTALL_DIR/$name"
+                    _mark_version "$name" "$version"
+                    echo "[OK] $name $version installed"
+                    rm -rf "$tmp_dir"
+                else
+                    echo "[ERR] Binary '$path_in_archive' not found in archive for $name" >&2
+                    ls -R "$tmp_dir" >&2
+                    rm -rf "$tmp_dir"
+                    return 1
+                fi
+            else
+                echo "[ERR] Failed to download/extract $name" >&2
+                rm -rf "$tmp_dir"
+                return 1
+            fi
+        else
+            # Extract everything to INSTALL_DIR (e.g. if tarball structure is flat or we want everything)
+            # But usually we want a single binary.
+            # If no path specified, assume binary name matches tool name at root?
+            # Let's assume path_in_archive is required for tarballs unless we want full extraction.
+            # For now, all our tarballs have path_in_archive.
+            echo "[ERR] No archive path specified for tarball $name" >&2
+            return 1
+        fi
     else
-        echo "[ERR] Failed to install kustomize" >&2
-        return 1
-    fi
-}
-
-_install_stern() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "stern" "$STERN_VERSION"; then
-        echo "[OK] stern $STERN_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing stern $STERN_VERSION..."
-    local url="https://github.com/stern/stern/releases/download/v${STERN_VERSION}/stern_${STERN_VERSION}_${os}_${arch}.tar.gz"
-
-    if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" stern; then
-        chmod +x "$INSTALL_DIR/stern"
-        _mark_version "stern" "$STERN_VERSION"
-        echo "[OK] stern $STERN_VERSION installed"
-    else
-        echo "[ERR] Failed to install stern" >&2
-        return 1
-    fi
-}
-
-_install_yq() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "yq" "$YQ_VERSION"; then
-        echo "[OK] yq $YQ_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing yq $YQ_VERSION..."
-    local url="https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_${os}_${arch}"
-
-    if curl -fsSL "$url" -o "$INSTALL_DIR/yq"; then
-        chmod +x "$INSTALL_DIR/yq"
-        _mark_version "yq" "$YQ_VERSION"
-        echo "[OK] yq $YQ_VERSION installed"
-    else
-        echo "[ERR] Failed to install yq" >&2
-        return 1
-    fi
-}
-
-_install_sops() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "sops" "$SOPS_VERSION"; then
-        echo "[OK] sops $SOPS_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing sops $SOPS_VERSION..."
-    local url="https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.${os}.${arch}"
-
-    if curl -fsSL "$url" -o "$INSTALL_DIR/sops"; then
-        chmod +x "$INSTALL_DIR/sops"
-        _mark_version "sops" "$SOPS_VERSION"
-        echo "[OK] sops $SOPS_VERSION installed"
-    else
-        echo "[ERR] Failed to install sops" >&2
-        return 1
-    fi
-}
-
-_install_kube_ps1() {
-    if _check_version "kube-ps1" "$KUBE_PS1_VERSION"; then
-        echo "[OK] kube-ps1 $KUBE_PS1_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing kube-ps1 $KUBE_PS1_VERSION..."
-    local url="https://raw.githubusercontent.com/jonmosco/kube-ps1/v${KUBE_PS1_VERSION}/kube-ps1.sh"
-
-    if curl -fsSL "$url" -o "$INSTALL_DIR/kube-ps1.sh"; then
-        _mark_version "kube-ps1" "$KUBE_PS1_VERSION"
-        echo "[OK] kube-ps1 $KUBE_PS1_VERSION installed"
-    else
-        echo "[ERR] Failed to install kube-ps1" >&2
-        return 1
-    fi
-}
-
-_install_kubeshark() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "kubeshark" "$KUBESHARK_VERSION"; then
-        echo "[OK] kubeshark $KUBESHARK_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing kubeshark $KUBESHARK_VERSION..."
-    # kubeshark uses different naming: darwin/linux and amd64/arm64
-    local url="https://github.com/kubeshark/kubeshark/releases/download/v${KUBESHARK_VERSION}/kubeshark_${os}_${arch}"
-
-    if curl -fsSL "$url" -o "$INSTALL_DIR/kubeshark"; then
-        chmod +x "$INSTALL_DIR/kubeshark"
-        _mark_version "kubeshark" "$KUBESHARK_VERSION"
-        echo "[OK] kubeshark $KUBESHARK_VERSION installed"
-    else
-        echo "[ERR] Failed to install kubeshark" >&2
-        return 1
-    fi
-}
-
-_install_kubeseal() {
-    local platform
-    platform=$(_detect_platform) || return 1
-    local os="${platform%_*}"
-    local arch="${platform#*_}"
-
-    if _check_version "kubeseal" "$KUBESEAL_VERSION"; then
-        echo "[OK] kubeseal $KUBESEAL_VERSION already installed"
-        return 0
-    fi
-
-    echo "[DL] Installing kubeseal $KUBESEAL_VERSION..."
-    local url="https://github.com/bitnami-labs/sealed-secrets/releases/download/v${KUBESEAL_VERSION}/kubeseal-${KUBESEAL_VERSION}-${os}-${arch}.tar.gz"
-
-    if curl -fsSL "$url" | tar -xz -C "$INSTALL_DIR" kubeseal; then
-        chmod +x "$INSTALL_DIR/kubeseal"
-        _mark_version "kubeseal" "$KUBESEAL_VERSION"
-        echo "[OK] kubeseal $KUBESEAL_VERSION installed"
-    else
-        echo "[ERR] Failed to install kubeseal" >&2
+        echo "[ERR] Unknown install type: $install_type" >&2
         return 1
     fi
 }
@@ -426,19 +228,26 @@ _install_kube_tools() {
     echo "Installing Kubernetes tools in $INSTALL_DIR"
     echo "=================================================="
 
-    # Install all tools (errors don't terminate shell)
-    _install_kubectl || true
-    _install_kubectx || true
-    _install_helm || true
-    _install_helmfile || true
-    _install_k9s || true
-    _install_kustomize || true
-    _install_stern || true
-    _install_yq || true
-    _install_sops || true
-    _install_kube_ps1 || true
-    _install_kubeshark || true
-    _install_kubeseal || true
+    if [[ -z "${TOOLS_METADATA:-}" ]]; then
+        echo "[ERR] TOOLS_METADATA not found. Please check tools.conf" >&2
+        return 1
+    fi
+
+    for entry in "${TOOLS_METADATA[@]}"; do
+        # entry format: NAME|VAR_NAME|CHECK_TYPE|CHECK_SOURCE|INSTALL_TYPE|INSTALL_URL|ARCHIVE_PATH
+        IFS='|' read -r name var_name _ _ install_type install_url archive_path <<< "$entry"
+
+        # Get version from variable name
+        local version
+        eval version=\$$var_name
+
+        if [[ -z "$version" ]]; then
+            echo "[WARN] Version for $name ($var_name) is empty, skipping."
+            continue
+        fi
+
+        _install_tool "$name" "$version" "$install_type" "$install_url" "$archive_path" || true
+    done
 
     echo "=================================================="
     echo "Installation complete"

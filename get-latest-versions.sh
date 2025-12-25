@@ -9,7 +9,7 @@ fi
 trap 'rc=$?; echo "[ERR] Échec (rc=$rc) à la ligne $LINENO: $BASH_COMMAND" >&2; exit $rc' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBE_TOOLS_FILE="${KUBE_TOOLS_FILE:-$SCRIPT_DIR/kube-tools.sh}"
+KUBE_TOOLS_FILE="${KUBE_TOOLS_FILE:-$SCRIPT_DIR/tools.conf}"
 
 APPLY=0
 DRY_RUN=0
@@ -20,9 +20,9 @@ Usage:
   ./get-latest-versions.sh [--apply|-a] [--dry-run] [--file PATH]
 
 Options:
-  --apply, -a   Met à jour les *_VERSION dans kube-tools.sh (pour les tools OUTDATED)
+  --apply, -a   Met à jour les *_VERSION dans tools.conf (pour les tools OUTDATED)
   --dry-run     Affiche ce qui serait modifié sans écrire le fichier
-  --file PATH   Chemin vers kube-tools.sh (par défaut: ./kube-tools.sh)
+  --file PATH   Chemin vers tools.conf (par défaut: ./tools.conf)
 USAGE
 }
 
@@ -144,6 +144,10 @@ if [[ ! -f "$KUBE_TOOLS_FILE" ]]; then
   echo "[ERR] Fichier introuvable: $KUBE_TOOLS_FILE" >&2
   exit 2
 fi
+
+# Source the tools file to get TOOLS_METADATA
+source "$KUBE_TOOLS_FILE"
+
 if [[ "$APPLY" == "1" ]]; then
   if [[ "$DRY_RUN" == "1" ]]; then
     echo "Mode: APPLY (mise à jour de $KUBE_TOOLS_FILE) [DRY-RUN]"
@@ -158,22 +162,27 @@ echo "----------------------------------------"
 printf "%-10s %-12s %-12s %s\n" "tool" "current" "latest" "status"
 echo "----------------------------------------"
 
-_kubectl_latest="$(_strip_v "$(curl -fsSL https://dl.k8s.io/release/stable.txt 2>/dev/null || true)")"
-_check "kubectl" "$(_read_version_var KUBECTL_VERSION)" "${_kubectl_latest:-}" "KUBECTL_VERSION"
+# Iterate over TOOLS_METADATA
+if [[ -z "${TOOLS_METADATA:-}" ]]; then
+    echo "[ERR] TOOLS_METADATA not found in $KUBE_TOOLS_FILE" >&2
+    exit 1
+fi
 
-# GitHub releases/tags
-_check "kubectx"   "$(_read_version_var KUBECTX_VERSION)"     "$(_latest_github "ahmetb/kubectx")" "KUBECTX_VERSION"
-_check "kubens"    "$(_read_version_var KUBENS_VERSION)"      "$(_latest_github "ahmetb/kubectx")" "KUBENS_VERSION"
-_check "helm"      "$(_read_version_var HELM_VERSION)"        "$(_latest_github "helm/helm")" "HELM_VERSION"
-_check "helmfile"  "$(_read_version_var HELMFILE_VERSION)"    "$(_latest_github "helmfile/helmfile")" "HELMFILE_VERSION"
-_check "k9s"       "$(_read_version_var K9S_VERSION)"         "$(_latest_github "derailed/k9s")" "K9S_VERSION"
-_check "kustomize" "$(_read_version_var KUSTOMIZE_VERSION)"   "$(_latest_github "kubernetes-sigs/kustomize")" "KUSTOMIZE_VERSION"
-_check "stern"     "$(_read_version_var STERN_VERSION)"       "$(_latest_github "stern/stern")" "STERN_VERSION"
-_check "yq"        "$(_read_version_var YQ_VERSION)"          "$(_latest_github "mikefarah/yq")" "YQ_VERSION"
-_check "sops"      "$(_read_version_var SOPS_VERSION)"        "$(_latest_github "getsops/sops")" "SOPS_VERSION"
-_check "kube-ps1"  "$(_read_version_var KUBE_PS1_VERSION)"    "$(_latest_github "jonmosco/kube-ps1")" "KUBE_PS1_VERSION"
-_check "kubeshark" "$(_read_version_var KUBESHARK_VERSION)"   "$(_latest_github "kubeshark/kubeshark")" "KUBESHARK_VERSION"
-_check "kubeseal"  "$(_read_version_var KUBESEAL_VERSION)"    "$(_latest_github "bitnami-labs/sealed-secrets")" "KUBESEAL_VERSION"
+for entry in "${TOOLS_METADATA[@]}"; do
+    # entry format: NAME|VAR|TYPE|SOURCE|...
+    IFS='|' read -r name var type source _ <<< "$entry"
+
+    current="$(_read_version_var "$var")"
+    latest=""
+
+    if [[ "$type" == "github" ]]; then
+        latest="$(_latest_github "$source")"
+    elif [[ "$type" == "url" ]]; then
+        latest="$(_strip_v "$(curl -fsSL "$source" 2>/dev/null || true)")"
+    fi
+
+    _check "$name" "$current" "$latest" "$var"
+done
 
 echo "----------------------------------------"
 if [[ "$_fail" -eq 0 ]]; then
